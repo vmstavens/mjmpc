@@ -2,18 +2,14 @@
 import numpy as np
 import os
 
-from mjmpc.envs import *
 from .logger import LoggerClass
 
 
-def set_qpos_qvel(sim, qpos, qvel, nq, nv):
-    state = sim.get_state()
-    for i in range(nq):
-        state.qpos[i] = qpos[i]
-    for i in range(nv):
-        state.qvel[i] = qvel[i]
-    sim.set_state(state)
-    sim.forward()
+def set_qpos_qvel(model, data, qpos, qvel):
+    import mujoco
+    data.qpos[:] = qpos
+    data.qvel[:] = qvel
+    mujoco.mj_forward(model, data)
 
 def render_trajs(env, trajectories, n_times=1):
     try:
@@ -33,55 +29,20 @@ def render_trajs(env, trajectories, n_times=1):
                     env.render()
     except KeyboardInterrupt:
         print('Exiting ...')
-        
 
-def dump_videos(env,
-                trajectories,
-                frame_size=(640,480),
-                folder='/tmp/',
-                filename='newvid',
-                camera_name=None,
-                device_id=0):
 
-    import skvideo.io
-    for ep, traj in enumerate(trajectories):
-        arrs = []
+def dump_videos(env, trajectories, frame_size=(640, 480), folder="/tmp/",
+                filename="newvid", camera_name=None, device_id=0):
+    import imageio.v2 as imageio
+    os.makedirs(folder, exist_ok=True)
+    for episode, trajectory in enumerate(trajectories):
         env.reset()
-        state = traj['states'][0]
-        env.set_env_state(state)
-        for action in traj['actions']:
-            env.step(action)
-            curr_frame = env.get_curr_frame(frame_size=frame_size, camera_name=camera_name, device_id=device_id)
-            arrs.append(curr_frame)
-        # for state in traj['states']:
-        #     # env.step(action)
-        #     env.set_env_state(state)
-        #     curr_frame = env.get_curr_frame(frame_size=frame_size, camera_name=camera_name, device_id=device_id)
-        #     arrs.append(curr_frame)
-
-
-
-    # for ep in range(num_episodes):
-    #     print("Episode %d: rendering offline " % ep, end='', flush=True)
-    #     o = self.reset()
-    #     d = False
-    #     t = 0
-    #     arrs = []
-    #     t0 = timer.time()
-    #     while t < horizon and d is False:
-    #         a = policy.get_action(o)[0] if mode == 'exploration' else policy.get_action(o)[1]['evaluation']
-    #         o, r, d, _ = self.step(a)
-    #         t = t+1
-    #         curr_frame = self.sim.render(width=frame_size[0], height=frame_size[1],
-    #                                      mode='offscreen', camera_name=camera_name, device_id=0)
-    #         arrs.append(curr_frame[::-1,:,:])
-            # print(t, end=', ', flush=True)
-        out_file = os.path.join(folder, filename + str(ep) + ".mp4")
-        skvideo.io.vwrite(out_file, np.asarray(arrs))
-        print("saved", out_file)
-            # t1 = timer.time()
-            # print("time taken = %f"% (t1-t0))
-
+        env.set_env_state(trajectory["states"][0])
+        output = os.path.join(folder, f"{filename}{episode}.mp4")
+        with imageio.get_writer(output, fps=env.metadata.get("render_fps", 30)) as writer:
+            for action in trajectory["actions"]:
+                env.step(action)
+                writer.append_data(env.get_curr_frame(frame_size, camera_name, device_id))
 
 
 def get_logger(display_name, log_dir, mode):
@@ -117,7 +78,7 @@ def stack_tensor_dict_list(tensor_dict_list):
 
 def tensor_dict_list_to_array(tensor_dict_list):
     """
-    Stack a list of dictionaries into a numpy array 
+    Stack a list of dictionaries into a numpy array
     :param tensor_dict_list: a list of dictionaries of tensors
     :return numpy array
     """
@@ -128,7 +89,7 @@ def tensor_dict_list_to_array(tensor_dict_list):
             # curr_vals.append(d[k])
         # curr_vals = np.array(curr_vals)
         curr_vals = np.concatenate([d[k] for k in d.keys()])
-        
+
         ret.append(curr_vals.copy())
     return np.array(ret)
 

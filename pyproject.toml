@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mjmpc"
+version = "2.0.0"
+description = "Sampling-based model predictive control with native MuJoCo and Gymnasium"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [{name = "Mohak Bhardwaj"}]
+dependencies = [
+  "gymnasium[classic-control,mujoco]>=1.2,<2",
+  "mujoco>=3.3,<4",
+  "numpy>=2,<3",
+  "scipy>=1.14,<2",
+  "torch>=2.5,<3",
+  "cloudpickle>=3,<4",
+  "colorlog>=6,<7",
+  "tabulate>=0.9,<1",
+  "pandas>=2.2,<4",
+  "pyyaml>=6,<7",
+  "tqdm>=4.66,<5",
+  "click>=8,<9",
+  "imageio[ffmpeg]>=2.36,<3",
+]
+
+[project.scripts]
+mjmpc = "mjmpc.cli:main"
+
+[project.optional-dependencies]
+training = ["tensorboard>=2.18,<3", "stable-baselines3>=2.5,<3"]
+
+[dependency-groups]
+dev = ["pytest>=8.4,<10", "ruff>=0.11,<1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["mjmpc"]
+
+[tool.pytest.ini_options]
+addopts = "--disable-plugin-autoload"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]

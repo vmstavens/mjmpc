@@ -8,7 +8,7 @@ class QuadraticTimeVaryingVF(nn.Module):
         self.d_obs = d_obs
         self.d_input = int(d_obs + (d_obs * (d_obs+1))/2 + 1) #linear + quadratic + time
         self.horizon = horizon
-		
+
         weights = torch.zeros(horizon, self.d_input).float()
         biases = torch.zeros(horizon).float()
         self.weights = nn.Parameter(weights)
@@ -19,24 +19,24 @@ class QuadraticTimeVaryingVF(nn.Module):
         Parameters
         ----------
         observations: torch.Tensor [num_paths x horizon x d_obs]
-        
+
         Returns
         --------
         values: torch.Tensor [num_paths x horizon]
-        
+
         """
         features = self.feature_mat(observations)
         values = (features * self.weights.data).sum(-1)
-        values += self.biases.data.T
+        values += self.biases.data
         return values
-    
+
     def feature_mat(self, observations):
         num_paths = observations.shape[0]
         feat_mat = torch.zeros((num_paths, self.horizon, self.d_input))
-        
+
         #linear features
         feat_mat[:,:,0:self.d_obs] = observations
-        
+
         #quadratic features
         k = self.d_obs
         for i in range(self.d_obs):
@@ -60,23 +60,23 @@ class QuadraticTimeVaryingVF(nn.Module):
             predictions = self(observations)
             errors = returns - predictions
             error_before = torch.sum(errors**2)/torch.sum(returns**2)
-        
+
         #make horizon the batch dimension
         feat = features.permute(1,0,2)
         ret = returns.permute(1,0).unsqueeze(-1)
 
         #append 1 to features to account for bias
-        feat = torch.cat((feat, torch.ones(self.horizon, num_paths, 1)), axis=-1) 
+        feat = torch.cat((feat, torch.ones(self.horizon, num_paths, 1)), axis=-1)
 
         #linear solve to get weights for each timestep in horizon
         I = torch.eye(self.d_input+1).repeat(self.horizon,1,1)
         feat_t = feat.transpose(1,2)
-        X, _ = torch.solve(feat_t.bmm(ret), feat_t.bmm(feat) + delta_reg * I)
+        X = torch.linalg.solve(feat_t.bmm(feat) + delta_reg * I, feat_t.bmm(ret))
         X = X.squeeze(-1)
 
         self.weights.data.copy_(X[:,:-1])
         self.biases.data.copy_(X[:,-1])
-        
+
 
         if return_errors:
             predictions = self(observations)
@@ -92,7 +92,7 @@ class QuadraticTimeVaryingVF(nn.Module):
 
 
 
-    
+
 if __name__ == "__main__":
     horizon = 2
     d_obs = 4

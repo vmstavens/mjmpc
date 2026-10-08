@@ -1,48 +1,41 @@
-import gym
-import numpy as np
-import torch
-import random
-
+"""Train or evaluate Stable Baselines3 SAC with the optional training extra."""
+import argparse
+import gymnasium as gym
 from stable_baselines3 import SAC
-from stable_baselines3.sac import MlpPolicy
-from mjmpc.envs import GymEnvWrapper
-import mj_envs
+import mjmpc.envs
 
-seed_val=123456
-torch.manual_seed(seed_val)
-np.random.seed(seed_val)
-random.seed(seed_val)
-env = gym.make('cartpole-v0')
-env = GymEnvWrapper(env)
-env.seed(seed_val)
-env.action_space.seed(seed_val)
 
-model = SAC(MlpPolicy, env, learning_starts=10000, verbose=1, seed=seed_val)
-# model.learn(total_timesteps=200000, log_interval=4)
-# model.save("sac_cartpole")
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", default="SimplePendulum-v0")
+    parser.add_argument("--steps", type=int, default=100000)
+    parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument("--model", default="sac_pendulum")
+    parser.add_argument("--evaluate", action="store_true")
+    args = parser.parse_args()
+    env = gym.make(args.env)
+    try:
+        if args.evaluate:
+            model = SAC.load(args.model, env=env)
+            rewards = []
+            for episode in range(10):
+                obs, _ = env.reset(seed=args.seed + episode)
+                total = 0.0
+                while True:
+                    action, _ = model.predict(obs, deterministic=True)
+                    obs, reward, terminated, truncated, _ = env.step(action)
+                    total += reward
+                    if terminated or truncated:
+                        break
+                rewards.append(total)
+            print(f"Average reward: {sum(rewards) / len(rewards):.3f}")
+        else:
+            model = SAC("MlpPolicy", env, verbose=1, seed=args.seed)
+            model.learn(total_timesteps=args.steps)
+            model.save(args.model)
+    finally:
+        env.close()
 
-# del model # remove to demonstrate saving and loading
 
-model = SAC.load("sac_cartpole")
-
-# obs = env.reset()
-num_episodes = 0.0
-ep_rewards = []
-curr_ep_rew = 0.0
-env.seed(123)
-
-for i_episode in range(10):
-    test_episode_seed = 123 + i_episode*12345
-    obs = env.reset(test_episode_seed)
-    num_episodes += 1
-    curr_ep_rew = 0.0
-    t=0
-    while True:
-        action, _states = model.predict(obs)
-        obs, reward, done, info = env.step(action)
-        curr_ep_rew += reward
-        # env.render()
-        if done:
-            ep_rewards.append(curr_ep_rew)
-            break
-print('Average reward: {}'.format(np.average(ep_rewards)))
+if __name__ == "__main__":
+    main()

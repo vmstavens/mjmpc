@@ -2,7 +2,7 @@ from copy import deepcopy
 import torch.multiprocessing as multiprocessing
 from collections import OrderedDict
 
-import gym
+import gymnasium as gym
 import numpy as np
 import time
 
@@ -26,9 +26,10 @@ def _worker(remote, parent_remote, env_fn_wrapper, model):
             elif cmd == 'render':
                 remote.send(env.render(*data[0], **data[1]))
             elif cmd == 'close':
+                env.close()
                 remote.close()
                 break
-            elif cmd == 'get_spaces':   
+            elif cmd == 'get_spaces':
                 remote.send((env.observation_space, env.action_space))
             elif cmd == 'env_method':
                 method = getattr(env, data[0])
@@ -76,7 +77,7 @@ class TorchModelVecEnv(VecEnv):
     :param model: ([torch.nn model]) Model used for parallel rollouts
     :param start_method: (str) method used to start the subprocesses.
            Must be one of the methods returned by multiprocessing.get_all_start_methods().
-           Defaults to 'fork' on available platforms, and 'spawn' otherwise.
+           Defaults to 'spawn'; entry points must use a __main__ guard.
     """
 
     def __init__(self, env_fns, model, start_method=None):
@@ -88,11 +89,7 @@ class TorchModelVecEnv(VecEnv):
         self.model.share_memory()
 
         if start_method is None:
-            # Fork is not a thread safe method (see issue #217)
-            # but is more user friendly (does not require to wrap the code in
-            # a `if __name__ == "__main__":`)
-            fork_available = 'fork' in multiprocessing.get_all_start_methods()
-            start_method = 'fork' if fork_available else 'spawn'
+            start_method = "spawn"
         ctx = multiprocessing.get_context(start_method)
 
         self.remotes, self.work_remotes = zip(*[ctx.Pipe() for _ in range(n_envs)])
@@ -127,11 +124,11 @@ class TorchModelVecEnv(VecEnv):
         obs, rews, dones, infos = zip(*results)
         return flatten_obs(obs, self.observation_space), np.stack(rews), np.stack(dones), infos
 
-    def rollout(self, num_rollouts, horizon, mode='mean', noise=None): 
+    def rollout(self, num_rollouts, horizon, mode='mean', noise=None):
         """
         Rollout the environments to a horizon given open loop action sequence
 
-        :param 
+        :param
         """
         self.rollout_async(num_rollouts, horizon, mode, noise)
         return self.rollout_wait()
@@ -141,7 +138,7 @@ class TorchModelVecEnv(VecEnv):
         batch_size = int(num_rollouts/len(self.remotes))
         for i,remote in enumerate(self.remotes):
             if noise is not None:
-                noise_vec_i = noise[i*batch_size: (i+1)*batch_size, :, :].copy() 
+                noise_vec_i = noise[i*batch_size: (i+1)*batch_size, :, :].copy()
             else:
                 noise_vec_i = None
             data = {'batch_size': batch_size, 'horizon': horizon, 'mode': mode, 'noise': noise_vec_i}
@@ -156,7 +153,7 @@ class TorchModelVecEnv(VecEnv):
         act_info = [res[2] for res in results]
         rew_vec = [res[3] for res in results]
         done_vec = [res[4] for res in results]
-        next_obs_vec = [res[5] for res in results] 
+        next_obs_vec = [res[5] for res in results]
         info = [res[6] for res in results]
         stacked_obs  = np.concatenate(obs_vec, axis=0)
         stacked_act = np.concatenate(act_vec, axis=0)
@@ -182,25 +179,9 @@ class TorchModelVecEnv(VecEnv):
             remote.send(('close', None))
         for process in self.processes:
             process.join()
+        self._close_renderer()
         self.closed = True
 
-    def render(self, mode='human', *args, **kwargs):
-        for pipe in self.remotes:
-            # gather images from subprocesses
-            # `mode` will be taken into account later
-            pipe.send(('render', (args, {'mode': 'rgb_array', **kwargs})))
-        imgs = [pipe.recv() for pipe in self.remotes]
-        # Create a big image by tiling images from subprocesses
-        bigimg = tile_images(imgs)
-        if mode == 'human':
-            import cv2
-            cv2.imshow('vecenv', bigimg[:, :, ::-1])
-            cv2.waitKey(1)
-        elif mode == 'rgb_array':
-            return bigimg
-        else:
-            raise NotImplementedError
-    
     def get_obs(self):
         for remote in self.remotes:
             remote.send(('get_obs', None))
@@ -215,7 +196,7 @@ class TorchModelVecEnv(VecEnv):
 
     def set_env_state(self, state_dicts):
         """
-        Set the state of all envs given a list of 
+        Set the state of all envs given a list of
         state dicts
         If only one state is provided, we set state of all envs to that
         else each env must be provided one state
@@ -239,7 +220,7 @@ class TorchModelVecEnv(VecEnv):
 
     def get_images(self):
         for pipe in self.remotes:
-            pipe.send(('render', {"mode": 'rgb_array'}))
+            pipe.send(('render', ((), {})))
         imgs = [pipe.recv() for pipe in self.remotes]
         return imgs
 

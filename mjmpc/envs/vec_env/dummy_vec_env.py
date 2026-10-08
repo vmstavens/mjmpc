@@ -22,7 +22,7 @@ class DummyVecEnv(VecEnv):
         self.buf_obs = OrderedDict([
             (k, np.zeros((self.num_envs,) + tuple(shapes[k]), dtype=dtypes[k]))
             for k in self.keys])
-        self.buf_dones = np.zeros((self.num_envs,), dtype=np.bool)
+        self.buf_dones = np.zeros((self.num_envs,), dtype=bool)
         self.buf_rews = np.zeros((self.num_envs,), dtype=np.float32)
         self.buf_infos = [{} for _ in range(self.num_envs)]
         self.actions = None
@@ -48,17 +48,18 @@ class DummyVecEnv(VecEnv):
         return self._obs_from_buf()
 
     def close(self):
+        self._close_renderer()
         for env in self.envs:
             env.close()
 
     def get_images(self):
-        return [env.render(mode='rgb_array') for env in self.envs]
+        return [env.render() for env in self.envs]
 
-    def render(self, *args, **kwargs):
+    def render(self, mode="human", *args, **kwargs):
         if self.num_envs == 1:
             return self.envs[0].render(*args, **kwargs)
         else:
-            return super().render(*args, **kwargs)
+            return super().render(mode, *args, **kwargs)
 
     def _save_obs(self, env_idx, obs):
         for key in self.keys:
@@ -89,3 +90,16 @@ class DummyVecEnv(VecEnv):
     def _get_target_envs(self, indices):
         indices = self._get_indices(indices)
         return [self.envs[i] for i in indices]
+
+    def get_env_state(self):
+        return [env.get_env_state() for env in self.envs]
+
+    def set_env_state(self, states):
+        if not isinstance(states, list):
+            states = [states] * self.num_envs
+        if len(states) == 1:
+            states = states * self.num_envs
+        if len(states) != self.num_envs:
+            raise ValueError("Provide one state or one per environment")
+        for env, state in zip(self.envs, states):
+            env.set_env_state(state)

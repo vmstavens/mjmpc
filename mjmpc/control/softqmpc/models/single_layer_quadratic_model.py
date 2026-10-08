@@ -28,7 +28,7 @@ class SingleLayerQuadraticQFunc(nn.Module):
         # self.c = nn.Parameter(c)
         # self.eye = torch.eye(self.d_total)
 
-        self.linear = torch.nn.Linear(self.d_state, self.d_out)   
+        self.linear = torch.nn.Linear(self.d_state, self.d_out)
 
     def forward(self, states, actions):
         """
@@ -53,7 +53,7 @@ class SingleLayerQuadraticQFunc(nn.Module):
         return out
 
     def get_quadratic_params(self, states):
-        out = self.linear(states) 
+        out = self.linear(states)
         L = out[:, 0:self.d_L]
         J = out[:, self.d_L:self.d_L+self.d_J]
         c = out[:,-1]
@@ -76,8 +76,8 @@ class SingleLayerQuadraticQFunc(nn.Module):
         """
         out = self(states, actions)
         loss_term = 0.5 * F.mse_loss(out, targets, reduction='mean')
-        # reg_term = reg * torch.norm(self.P - self.eye) 
-        loss = loss_term #+ reg_term 
+        # reg_term = reg * torch.norm(self.P - self.eye)
+        loss = loss_term #+ reg_term
         return loss
 
     def get_P(self, L):
@@ -86,10 +86,10 @@ class SingleLayerQuadraticQFunc(nn.Module):
         Lmat[:, tril_indices[0], tril_indices[1]] = L
         P = torch.matmul(Lmat, Lmat.permute(0,2,1))
         return P
-    
+
     def get_act_mean_sigma(self, state, lam):
         """
-        Return conditional mean and covariance of 
+        Return conditional mean and covariance of
         actions given state
         In Natural Parameterization we have,
             J = [Js, Ja], P = [Pss, Pas^T; Pas, Paa]
@@ -97,7 +97,7 @@ class SingleLayerQuadraticQFunc(nn.Module):
         which gives Moment Parameterization
             Sigma = Paa^-1
             mu = Sigma * (Ja - Psa * state)
-        
+
         Parameters
         ----------
         state: Tensor (1 x self.d_state)
@@ -128,7 +128,7 @@ class SingleLayerQuadraticQFunc(nn.Module):
     #     Sigma = lam * torch.cholesky_inverse(P)
     #     Sigma += beta * torch.eye(Sigma.shape[0])
     #     Pnew = (1./lam) * torch.cholesky_inverse(Sigma)
-    #     Lmat = torch.cholesky(Pnew)
+    #     Lmat = torch.linalg.cholesky(Pnew)
     #     tril_indices = torch.tril_indices(row=self.d_total, col=self.d_total, offset=0)
     #     self.L.data = Lmat[tril_indices[0], tril_indices[1]]
 
@@ -157,5 +157,3 @@ class SingleLayerQuadraticQFunc(nn.Module):
         for name, param in self.named_parameters():
             if param.requires_grad:
                 print(name, param.data)
-
-

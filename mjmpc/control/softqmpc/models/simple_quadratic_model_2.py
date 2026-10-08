@@ -33,7 +33,7 @@ class SimpleQuadraticQFunc2(nn.Module):
         # torch.nn.init.normal_(L)
         torch.nn.init.normal_(Js)
         torch.nn.init.normal_(Ja)
-        
+
         self.Pss = nn.Parameter(Pss)
         self.Psa = nn.Parameter(Psa)
         self.Pas = nn.Parameter(Pas)
@@ -84,8 +84,8 @@ class SimpleQuadraticQFunc2(nn.Module):
         """
         out = self(states, actions)
         loss_term = 0.5 * F.mse_loss(out, targets, reduction='mean')
-        # reg_term = reg * torch.norm(self.P - self.eye) 
-        loss = loss_term #+ reg_term 
+        # reg_term = reg * torch.norm(self.P - self.eye)
+        loss = loss_term #+ reg_term
         return loss
 
     @property
@@ -95,10 +95,10 @@ class SimpleQuadraticQFunc2(nn.Module):
         Lmat[tril_indices[0], tril_indices[1]] = self.L
         P = torch.mm(Lmat, Lmat.t())
         return P
-    
+
     def get_act_mean_sigma(self, state, lam):
         """
-        Return conditional mean and covariance of 
+        Return conditional mean and covariance of
         actions given state
         In Natural Parameterization we have,
             J = [Js, Ja], P = [Pss, Pas^T; Pas, Paa]
@@ -106,11 +106,11 @@ class SimpleQuadraticQFunc2(nn.Module):
         which gives Moment Parameterization
             Sigma = Paa^-1
             mu = Sigma * (Ja - Psa * state)
-        
+
         Parameters
         ----------
         state: Tensor (1 x self.d_state)
-        lam: float 
+        lam: float
             Temperature
 
         Returns
@@ -136,7 +136,7 @@ class SimpleQuadraticQFunc2(nn.Module):
         Sigma = lam * torch.cholesky_inverse(Paa)
         Sigma += beta * torch.eye(Sigma.shape[0])
         Pnew = (1./lam) * torch.cholesky_inverse(Sigma)
-        Lmat = torch.cholesky(Pnew)
+        Lmat = torch.linalg.cholesky(Pnew)
         tril_indices = torch.tril_indices(row=self.d_act, col=self.d_act, offset=0)
         self.L.data = Lmat[tril_indices[0], tril_indices[1]]
 
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     import os
 
     os.environ['KMP_DUPLICATE_LIB_OK']='True'
-    
+
     test_regression = True
     test_mean_sigma = False
 
@@ -193,13 +193,13 @@ if __name__ == "__main__":
         torch.manual_seed(0)
         d_state = 1
         d_action = 1
-        if test_case == 0: 
+        if test_case == 0:
             Ptrue = torch.eye(d_state + d_action)
         elif test_case == 1:
             Ptrue = torch.rand(d_state + d_action, d_state + d_action)
         Jtrue = torch.ones(d_state + d_action)
         ctrue = 0.0
-        
+
         def get_targets(states, actions):
             inps = torch.cat((states, actions), axis=-1)
             inps = inps.unsqueeze(1)
@@ -231,7 +231,7 @@ if __name__ == "__main__":
         optimizer = optim.SGD(Q.parameters(), lr=1.0, weight_decay=0.)
         reg = 0.00001
         init_loss = Q.loss(states, actions, targets, reg)
-        for i in range(10000): 
+        for i in range(10000):
             optimizer.zero_grad()
             loss = Q.loss(states, actions, targets, reg)
             loss.backward()

@@ -4,7 +4,7 @@ Helpers for dealing with vectorized environments.
 
 from collections import OrderedDict
 
-import gym
+import gymnasium as gym
 import numpy as np
 
 
@@ -55,7 +55,6 @@ def obs_space_info(obs_space):
         dtypes: a dict mapping keys to dtypes.
     """
     if isinstance(obs_space, gym.spaces.Dict):
-        assert isinstance(obs_space.spaces, OrderedDict), "Dict space must have ordered subspaces"
         subspaces = obs_space.spaces
     elif isinstance(obs_space, gym.spaces.Tuple):
         subspaces = {i: space for i, space in enumerate(obs_space.spaces)}
@@ -86,7 +85,6 @@ def flatten_obs(obs, space):
     assert len(obs) > 0, "need observations from at least one environment"
 
     if isinstance(space, gym.spaces.Dict):
-        assert isinstance(space.spaces, OrderedDict), "Dict space must have ordered subspaces"
         assert isinstance(obs[0], dict), "non-dict observation for environment with Dict observation space"
         return OrderedDict([(k, np.stack([o[k] for o in obs])) for k in space.spaces.keys()])
     elif isinstance(space, gym.spaces.Tuple):

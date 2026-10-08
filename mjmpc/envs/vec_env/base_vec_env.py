@@ -36,7 +36,7 @@ class VecEnv(ABC):
     :param action_space: (Gym Space) the action space
     """
     metadata = {
-        'render.modes': ['human', 'rgb_array']
+        'render_modes': ['human', 'rgb_array']
     }
 
     def __init__(self, num_envs, observation_space, action_space):
@@ -165,14 +165,26 @@ class VecEnv(ABC):
         """
         raise NotImplementedError
 
-    def render(self, *args, **kwargs):
-        """
-        Gym environment rendering
+    def render(self, mode="human", *args, **kwargs):
+        from .tile_images import tile_images
+        image = tile_images(self.get_images())
+        if mode == "rgb_array":
+            return image
+        if mode != "human":
+            raise ValueError(f"Unsupported render mode: {mode}")
+        import pygame
+        pygame.display.init()
+        screen = pygame.display.set_mode((image.shape[1], image.shape[0]))
+        screen.blit(pygame.surfarray.make_surface(image.swapaxes(0, 1)), (0, 0))
+        pygame.event.pump()
+        pygame.display.flip()
+        self._display_open = True
 
-        :param mode: (str) the rendering type
-        """
-        # logger.warn('Render not defined for %s' % self)
-        return None
+    def _close_renderer(self):
+        if getattr(self, "_display_open", False):
+            import pygame
+            pygame.display.quit()
+            self._display_open = False
 
     @property
     def unwrapped(self):
@@ -232,6 +244,12 @@ class VecEnvWrapper(VecEnv):
     @abstractmethod
     def step_wait(self):
         pass
+
+    def get_env_state(self):
+        return self.venv.get_env_state()
+
+    def set_env_state(self, states):
+        return self.venv.set_env_state(states)
 
     def close(self):
         return self.venv.close()

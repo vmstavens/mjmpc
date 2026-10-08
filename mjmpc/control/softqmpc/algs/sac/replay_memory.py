@@ -24,10 +24,10 @@ class ReplayMemory:
 class ReplayMemoryTraj(ReplayMemory):
     def __init__(self, capacity):
         super(ReplayMemoryTraj, self).__init__(capacity)
-    
+
     def push(self, trajectories):
         for k in trajectories.keys():
-            if k is not 'infos':
+            if k != 'infos':
                 trajectories[k] = np.concatenate(trajectories[k], axis=0)
         num_elements = trajectories["observations"].shape[0]
         for i in range(num_elements):
@@ -39,4 +39,4 @@ class ReplayMemoryTraj(ReplayMemory):
             next_obs = trajectories["next_observations"][i]
             done = trajectories["dones"][i]
             self.buffer[self.position] = (obs, action, reward, next_obs, done)
-            self.position = (self.position + 1) % self.capacity      
+            self.position = (self.position + 1) % self.capacity

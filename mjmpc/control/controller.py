@@ -6,7 +6,7 @@ Date: 3 Jan, 2020
 """
 from abc import ABC, abstractmethod
 import copy
-from gym.utils import seeding
+from gymnasium.utils import seeding
 import numpy as np
 from mjmpc.utils import helpers
 
@@ -32,17 +32,17 @@ class Controller(ABC):
             size of state/observation space
         d_action : int
             size of action space
-        action_lows : np.ndarray 
+        action_lows : np.ndarray
             lower limits for each action dim
-        action_highs : np.ndarray  
+        action_highs : np.ndarray
             upper limits for each action dim
-        horizon : int  
+        horizon : int
             horizon of rollouts
         gamma : float
             discount factor
-        n_iters : int  
+        n_iters : int
             number of optimization iterations
-        set_sim_state_fn : function  
+        set_sim_state_fn : function
             set state of simulator using input
         get_sim_state_fn : function
             get state from the simulator
@@ -50,15 +50,15 @@ class Controller(ABC):
             steps the simulator and returns obs, reward, done, info
         sim_reset_fn : function
             resets the simulator
-        rollout_fn : function  
+        rollout_fn : function
             rollout policy (or actions) in simulator and return obs, reward, done, info
-        sample_mode : {'mean', 'sample'}  
+        sample_mode : {'mean', 'sample'}
             how to choose action to be executed
-            'mean' plays the first mean action and  
+            'mean' plays the first mean action and
             'sample' samples from the distribution
         batch_size : int
             optimize for a batch of states
-        seed : int  
+        seed : int
             seed value
         """
         self.d_state = d_state
@@ -84,11 +84,11 @@ class Controller(ABC):
         on current control distribution
         Parameters
         ----------
-        mode : {'mean', 'sample'}  
+        mode : {'mean', 'sample'}
             how to choose action to be executed
-            'mean' plays the first mean action and  
+            'mean' plays the first mean action and
             'sample' samples from the distribution
-        """        
+        """
         pass
 
     def sample_actions(self):
@@ -96,22 +96,22 @@ class Controller(ABC):
         Sample actions from current control distribution
         """
         raise NotImplementedError('sample_actions funtion not implemented')
-    
+
     @abstractmethod
     def _update_distribution(self, trajectories):
         """
-        Update current control distribution using 
+        Update current control distribution using
         rollout trajectories
-        
+
         Parameters
 
         trajectories : dict
             Rollout trajectories. Contains the following fields
             observations : np.ndarray ()
                 observations along rollouts
-            actions : np.ndarray 
+            actions : np.ndarray
                 actions sampled from control distribution along rollouts
-            costs : np.ndarray 
+            costs : np.ndarray
                 step costs along rollouts
             dones : np.ndarray
                 bool signalling end of episode
@@ -136,7 +136,7 @@ class Controller(ABC):
     @abstractmethod
     def _calc_val(self, cost_seq, act_seq):
         """
-        Calculate value of state given 
+        Calculate value of state given
         rollouts from a policy
 
         """
@@ -148,16 +148,16 @@ class Controller(ABC):
         Returns False by default
         """
         return False
-        
+
     @property
     def set_sim_state_fn(self):
         return self._set_sim_state_fn
-    
-    
+
+
     @set_sim_state_fn.setter
     def set_sim_state_fn(self, fn):
         """
-        Set function that sets the simulation 
+        Set function that sets the simulation
         environment to a particular state
         """
         self._set_sim_state_fn = fn
@@ -165,11 +165,11 @@ class Controller(ABC):
     @property
     def rollout_fn(self):
         return self._rollout_fn
-    
+
     @rollout_fn.setter
     def rollout_fn(self, fn):
         """
-        Set the rollout function from 
+        Set the rollout function from
         input function pointer
         """
         self._rollout_fn = fn
@@ -177,7 +177,7 @@ class Controller(ABC):
     # def generate_rollouts(self, state):
     #     """
     #         Samples a batch of actions, rolls out trajectories for each particle
-    #         and returns the resulting observations, costs,  
+    #         and returns the resulting observations, costs,
     #         actions
 
     #         Parameters
@@ -185,12 +185,12 @@ class Controller(ABC):
     #         state : dict or np.ndarray
     #             Initial state to set the simulation env to
     #      """
-        
+
     #     self._set_sim_state_fn(copy.deepcopy(state)) #set state of simulation
     #     act_seq = self.sample_actions() #sample actions using current control distribution
-    #     # obs_seq, cost_seq, done_seq, info_seq = self._rollout_fn(act_seq)  # rollout function returns the costs 
+    #     # obs_seq, cost_seq, done_seq, info_seq = self._rollout_fn(act_seq)  # rollout function returns the costs
     #     trajectories = self._rollout_fn(act_seq)
-        
+
     #     # trajectories = dict(
     #     #     observations=obs_seq,
     #     #     actions=act_seq,
@@ -199,7 +199,7 @@ class Controller(ABC):
     #     #     infos=helpers.stack_tensor_dict_list(info_seq)
     #     # )
     #     return trajectories
-    
+
     @abstractmethod
     def generate_rollouts(self, state):
         pass
@@ -210,13 +210,13 @@ class Controller(ABC):
 
         Parameters
         ----------
-        state : 
+        state :
             state to calculate optimal action from
-        
+
         calc_val : bool
             If true, calculate the optimal value estimate
             of the state along with action
-        
+
         Returns
         -------
         action : np.ndarray ()
@@ -224,7 +224,7 @@ class Controller(ABC):
         Raises
         ------
         ValueError
-            If self._rollout_fn, self._set_sim_state_fn or 
+            If self._rollout_fn, self._set_sim_state_fn or
                self._sim_step_fn are None
 
         """
@@ -258,8 +258,8 @@ class Controller(ABC):
 
     def get_optimal_value(self, state):
         """
-        Calculate optimal value of a state, i.e 
-        value under optimal policy. 
+        Calculate optimal value of a state, i.e
+        value under optimal policy.
 
         Parameters
         ----------
@@ -273,11 +273,7 @@ class Controller(ABC):
         self.reset() #reset the control distribution
         _, value = self.optimize(state, calc_val=True, hotstart=False)
         return value
-    
+
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return seed
-
-
-
-

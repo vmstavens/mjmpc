@@ -11,10 +11,10 @@ from mjmpc.utils.control_utils import cost_to_go, generate_noise, scale_ctrl, ga
 from mjmpc.utils import helpers
 
 class Reinforce(CLGaussianMPC):
-    def __init__(self, 
+    def __init__(self,
                  d_state,
                  d_obs,
-                 d_action,                
+                 d_action,
                  action_lows,
                  action_highs,
                  horizon,
@@ -47,7 +47,7 @@ class Reinforce(CLGaussianMPC):
         """
         super(Reinforce, self).__init__(d_state,
                                         d_obs,
-                                        d_action,                
+                                        d_action,
                                         action_lows,
                                         action_highs,
                                         horizon,
@@ -57,12 +57,12 @@ class Reinforce(CLGaussianMPC):
                                         gamma,
                                         n_iters,
                                         filter_coeffs,
-                                        set_sim_state_fn=None,
-                                        rollout_fn=None,
+                                        set_sim_state_fn=set_sim_state_fn,
+                                        rollout_fn=rollout_fn,
                                         cov_type='diagonal',
-                                        sample_mode='mean',
-                                        batch_size=1,
-                                        seed=0)
+                                        sample_mode=sample_mode,
+                                        batch_size=batch_size,
+                                        seed=seed)
         # torch.manual_seed(seed)
         self.num_particles = num_particles
         self.lr = lr
@@ -91,13 +91,13 @@ class Reinforce(CLGaussianMPC):
         self.old_mean_weights = self.mean_weights.copy()
         self.old_cov_action = self.cov_action.copy()
 
-        #compute cost to go 
+        #compute cost to go
         self.compute_returns(trajectories)
 
         #update baseline using regression
         if self.baseline is not None:
             self.fit_baseline(trajectories, self.delta_reg)
-        
+
         #compute baselines
         self.compute_baselines(trajectories)
 
@@ -108,7 +108,7 @@ class Reinforce(CLGaussianMPC):
         #calculate CPI-surrogate loss
         surr_before = self.cpi_surrogate(observations, actions, advantages)
         loss_before = self.compute_loss(observations, actions, advantages)
-        
+
         #Backtracking line search
         if self.delta_kl is not None:
             # curr_param_dict = deepcopy(self.policy.state_dict())
@@ -124,7 +124,7 @@ class Reinforce(CLGaussianMPC):
                 obs_cat = np.concatenate([observations, np.ones((observations.shape[0],1))], axis=-1)
                 new_mean_action = obs_cat @ self.mean_weights
                 old_mean_action = obs_cat @ self.old_mean_weights
-                
+
                 # avg KL(\pi_new || \pi_old)
                 kl_div = gaussian_kl(new_mean_action.T, self.cov_action, old_mean_action.T, self.old_cov_action)
                 mean_kl_div = np.average(kl_div)
@@ -133,14 +133,14 @@ class Reinforce(CLGaussianMPC):
                 else:
                     #reset policy parameters and decrease learning rate
                     print('backtracking', ctr, mean_kl_div, curr_lr)
-                    self.mean_weights = curr_params.copy() 
+                    self.mean_weights = curr_params.copy()
                     curr_lr *= 0.5
         else:
             #backpropagate loss and update policy params
             # surr = self.cpi_surrogate(observations, actions, advantages)
             grad = self.compute_policy_grad(observations, actions, advantages)
             self.mean_weights += self.lr * grad
-        
+
         # print(self.mean_weights)
 
         surr_after = self.cpi_surrogate(observations, actions, advantages)
@@ -193,7 +193,7 @@ class Reinforce(CLGaussianMPC):
     #         grad_mean = obs_cat.T @ grad_action
     #         traj_means.append()
     #         print(grad_mean)
-        
+
     #     return grad_mean
 
     def cpi_surrogate(self, observations, actions, advantages):
@@ -217,7 +217,7 @@ class Reinforce(CLGaussianMPC):
 
     def compute_returns(self, trajs):
         trajs["returns"] = cost_to_go(trajs["costs"], self.gamma_seq).copy()
-              
+
     def compute_baselines(self, trajs):
         if self.baseline is None:
             baseline_vals = np.average(trajs["returns"], axis=0) #time dependent constant baseline
@@ -238,13 +238,13 @@ class Reinforce(CLGaussianMPC):
         # input('....')
 
     def compute_advantages(self, trajs, gae_lambda=1.0):
-        trajs["advantages"] = trajs["returns"] - trajs["baselines"] 
-    
+        trajs["advantages"] = trajs["returns"] - trajs["baselines"]
+
     def vpg_grad(self, observations, actions, advantages):
         surr = self.cpi_surrogate(observations, actions, advantages)
         grad = torch.autograd.grad(surr, self.policy.parameters())
-        return grad        
-    
+        return grad
+
     def update_policy_parameters(self, learning_rate):
         for p in self.policy.parameters():
             p.data.sub_(p.grad.data * learning_rate)
@@ -263,20 +263,20 @@ class Reinforce(CLGaussianMPC):
         """
         beta_0, beta_1, beta_2 = self.filter_coeffs
         N = self.d_action
-        eps = self.np_random.multivariate_normal(mean=np.zeros((N,)), 
-                                                 cov = np.eye(self.d_action), 
+        eps = self.np_random.multivariate_normal(mean=np.zeros((N,)),
+                                                 cov = np.eye(self.d_action),
                                                  size=(self.num_particles, self.horizon))
         for i in range(2, eps.shape[1]):
             eps[:,i,:] = beta_0*eps[:,i,:] + beta_1*eps[:,i-1,:] + beta_2*eps[:,i-2,:]
-        return eps 
+        return eps
 
 
     def process_trajs(self, trajs):
-        """ 
+        """
             Return training data from given
             trajectories
 
-            :return observations (np.ndarray): 
+            :return observations (np.ndarray):
             :return actions (np.ndarray):
             :return rewards (np.ndarray):
             :return states (dict of np.ndarray): [len(trajs)) * len(trajs[0])]
@@ -313,7 +313,7 @@ class Reinforce(CLGaussianMPC):
 
     def _calc_val(self, cost_seq, act_seq):
         """
-        Calculate value of state given 
+        Calculate value of state given
         rollouts from a policy
         """
         pass
@@ -331,10 +331,10 @@ class Reinforce(CLGaussianMPC):
 # from mjmpc.utils import helpers
 
 # class Reinforce(CLGaussianMPC):
-#     def __init__(self, 
+#     def __init__(self,
 #                  d_state,
 #                  d_obs,
-#                  d_action,                
+#                  d_action,
 #                  action_lows,
 #                  action_highs,
 #                  horizon,
@@ -366,10 +366,10 @@ class Reinforce(CLGaussianMPC):
 #         super(Reinforce, self).__init__(d_state,
 #                                         d_obs,
 #                                         d_action,
-#                                         action_lows, 
+#                                         action_lows,
 #                                         action_highs,
 #                                         horizon,
-#                                         gamma,  
+#                                         gamma,
 #                                         n_iters,
 #                                         set_sim_state_fn,
 #                                         rollout_fn,
@@ -395,7 +395,7 @@ class Reinforce(CLGaussianMPC):
 #     @property
 #     def get_sim_obs_fn(self):
 #         return self._get_sim_obs_fn
-    
+
 #     @get_sim_obs_fn.setter
 #     def get_sim_obs_fn(self, fn):
 #         self._get_sim_obs_fn = fn
@@ -410,7 +410,7 @@ class Reinforce(CLGaussianMPC):
 #     # def generate_rollouts(self, state):
 #     #     """
 #     #         Samples a batch of actions, rolls out trajectories for each particle
-#     #         and returns the resulting observations, costs,  
+#     #         and returns the resulting observations, costs,
 #     #         actions
 
 #     #         Parameters
@@ -442,13 +442,13 @@ class Reinforce(CLGaussianMPC):
 #         Parameters
 #         -----------
 #         """
-#         #compute cost to go 
+#         #compute cost to go
 #         self.compute_returns(trajectories)
 
 #         #update baseline using regression
 #         if self.baseline is not None:
 #             self.fit_baseline(trajectories, self.delta_reg)
-        
+
 #         #compute baselines
 #         self.compute_baselines(trajectories)
 
@@ -459,7 +459,7 @@ class Reinforce(CLGaussianMPC):
 #         #calculate CPI-surrogate loss
 #         with torch.no_grad():
 #             surr_before = self.cpi_surrogate(observations, actions, advantages).item()
-        
+
 #         #Backtracking line search
 #         if self.delta_kl is not None:
 #             curr_param_dict = deepcopy(self.policy.state_dict())
@@ -482,7 +482,7 @@ class Reinforce(CLGaussianMPC):
 #                     break
 #                 else:
 #                     #reset policy parameters and decrease learning rate
-#                     # print('backtracking', ctr, mean_kl_div, curr_lr) 
+#                     # print('backtracking', ctr, mean_kl_div, curr_lr)
 #                     self.policy.load_state_dict(curr_param_dict)
 #                     curr_lr *= 0.5
 #         else:
@@ -539,13 +539,13 @@ class Reinforce(CLGaussianMPC):
 #         # else:
 #         #     with torch.no_grad():
 #         #         N, H = trajs["costs"].shape
-#         #         gamma_seq_a = np.pad(self.gamma_seq, ((0,0),(0,1)), constant_values=self.gamma ** H)  
+#         #         gamma_seq_a = np.pad(self.gamma_seq, ((0,0),(0,1)), constant_values=self.gamma ** H)
 #         #         next_obs_last = torch.FloatTensor(trajs["next_observations"][:,0])
 #         #         obs_last = torch.FloatTensor(trajs["observations"][:,0])
 #         #         term_cost = self.baseline(next_obs_last).detach().numpy()#.view(N,1)
 #         #         costs_new = np.concatenate((trajs["costs"], term_cost), axis=-1)
 #         #         returns = cost_to_go(costs_new, gamma_seq_a)
-#         #         trajs["returns"] = returns[:,:-1]                
+#         #         trajs["returns"] = returns[:,:-1]
 
 #     def compute_baselines(self, trajs):
 #         if self.baseline is None:
@@ -569,14 +569,14 @@ class Reinforce(CLGaussianMPC):
 #         # input('....')
 
 #     def compute_advantages(self, trajs, gae_lambda=1.0):
-#         trajs["advantages"] = trajs["returns"] - trajs["baselines"] 
+#         trajs["advantages"] = trajs["returns"] - trajs["baselines"]
 #         # naive_baseline = np.average(trajs["returns"], axis=0)
-    
+
 #     def vpg_grad(self, observations, actions, advantages):
 #         surr = self.cpi_surrogate(observations, actions, advantages)
 #         grad = torch.autograd.grad(surr, self.policy.parameters())
-#         return grad        
-    
+#         return grad
+
 #     def update_policy_parameters(self, learning_rate):
 #         for p in self.policy.parameters():
 #             p.data.sub_(p.grad.data * learning_rate)
@@ -596,20 +596,20 @@ class Reinforce(CLGaussianMPC):
 #         """
 #         beta_0, beta_1, beta_2 = self.filter_coeffs
 #         N = self.d_action
-#         eps = self.np_random.multivariate_normal(mean=np.zeros((N,)), 
-#                                                  cov = np.eye(self.d_action), 
+#         eps = self.np_random.multivariate_normal(mean=np.zeros((N,)),
+#                                                  cov = np.eye(self.d_action),
 #                                                  size=(self.num_particles, self.horizon))
 #         for i in range(2, eps.shape[1]):
 #             eps[:,i,:] = beta_0*eps[:,i,:] + beta_1*eps[:,i-1,:] + beta_2*eps[:,i-2,:]
-#         return eps 
+#         return eps
 
 
 #     def process_trajs(self, trajs):
-#         """ 
+#         """
 #             Return training data from given
 #             trajectories
 
-#             :return observations (np.ndarray): 
+#             :return observations (np.ndarray):
 #             :return actions (np.ndarray):
 #             :return rewards (np.ndarray):
 #             :return states (dict of np.ndarray): [len(trajs)) * len(trajs[0])]
@@ -651,16 +651,7 @@ class Reinforce(CLGaussianMPC):
 
 #     def _calc_val(self, cost_seq, act_seq):
 #         """
-#         Calculate value of state given 
+#         Calculate value of state given
 #         rollouts from a policy
 #         """
 #         pass
-
-
-
-
-
-
-
-
-

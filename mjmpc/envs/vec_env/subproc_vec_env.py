@@ -2,7 +2,7 @@ from copy import deepcopy
 import multiprocessing
 from collections import OrderedDict
 
-import gym
+import gymnasium as gym
 import numpy as np
 import time
 
@@ -27,9 +27,10 @@ def _worker(remote, parent_remote, env_fn_wrapper):
             elif cmd == 'render':
                 remote.send(env.render(*data[0], **data[1]))
             elif cmd == 'close':
+                env.close()
                 remote.close()
                 break
-            elif cmd == 'get_spaces':   
+            elif cmd == 'get_spaces':
                 remote.send((env.observation_space, env.action_space))
             elif cmd == 'env_method':
                 method = getattr(env, data[0])
@@ -80,7 +81,7 @@ class SubprocVecEnv(VecEnv):
     :param env_fns: ([Gym Environment]) Environments to run in subprocesses
     :param start_method: (str) method used to start the subprocesses.
            Must be one of the methods returned by multiprocessing.get_all_start_methods().
-           Defaults to 'fork' on available platforms, and 'spawn' otherwise.
+           Defaults to 'spawn'; entry points must use a __main__ guard.
     """
 
     def __init__(self, env_fns, start_method=None):
@@ -89,11 +90,7 @@ class SubprocVecEnv(VecEnv):
         n_envs = len(env_fns)
 
         if start_method is None:
-            # Fork is not a thread safe method (see issue #217)
-            # but is more user friendly (does not require to wrap the code in
-            # a `if __name__ == "__main__":`)
-            fork_available = 'fork' in multiprocessing.get_all_start_methods()
-            start_method = 'fork' if fork_available else 'spawn'
+            start_method = "spawn"
         ctx = multiprocessing.get_context(start_method)
 
         self.remotes, self.work_remotes = zip(*[ctx.Pipe() for _ in range(n_envs)])
@@ -125,11 +122,11 @@ class SubprocVecEnv(VecEnv):
         obs, rews, dones, infos = zip(*results)
         return flatten_obs(obs, self.observation_space), np.stack(rews), np.stack(dones), infos
 
-    def rollout(self, num_particles, horizon, mean, noise, mode="open_loop"): 
+    def rollout(self, num_particles, horizon, mean, noise, mode="open_loop"):
         """
         Rollout the environments to a horizon given open loop action sequence
 
-        :param u_vec 
+        :param u_vec
         """
         self.rollout_async(num_particles, horizon, mean, noise, mode)
         return self.rollout_wait()
@@ -162,7 +159,7 @@ class SubprocVecEnv(VecEnv):
         assert num_particles % len(self.remotes) == 0, "Number of particles must be divisible by number of cpus"
         batch_size = int(num_particles / len(self.remotes)) #int(noise.shape[0]/len(self.remotes))
         for i,remote in enumerate(self.remotes):
-            #Note: this will change if noise is weight matrix  
+            #Note: this will change if noise is weight matrix
             delta_i = noise[i*batch_size: (i+1)*batch_size, :, :].copy() if noise is not None else None
             remote.send(('rollout', (batch_size, horizon, mean, delta_i, mode)))
         self.waiting = True
@@ -201,25 +198,9 @@ class SubprocVecEnv(VecEnv):
             remote.send(('close', None))
         for process in self.processes:
             process.join()
+        self._close_renderer()
         self.closed = True
 
-    def render(self, mode='human', *args, **kwargs):
-        for pipe in self.remotes:
-            # gather images from subprocesses
-            # `mode` will be taken into account later
-            pipe.send(('render', (args, {'mode': 'rgb_array', **kwargs})))
-        imgs = [pipe.recv() for pipe in self.remotes]
-        # Create a big image by tiling images from subprocesses
-        bigimg = tile_images(imgs)
-        if mode == 'human':
-            import cv2
-            cv2.imshow('vecenv', bigimg[:, :, ::-1])
-            cv2.waitKey(1)
-        elif mode == 'rgb_array':
-            return bigimg
-        else:
-            raise NotImplementedError
-    
     def get_obs(self):
         for remote in self.remotes:
             remote.send(('get_obs', None))
@@ -234,7 +215,7 @@ class SubprocVecEnv(VecEnv):
 
     def set_env_state(self, state_dicts):
         """
-        Set the state of all envs given a list of 
+        Set the state of all envs given a list of
         state dicts
         If only one state is provided, we set state of all envs to that
         else each env must be provided one state
@@ -258,7 +239,7 @@ class SubprocVecEnv(VecEnv):
 
     def get_images(self):
         for pipe in self.remotes:
-            pipe.send(('render', {"mode": 'rgb_array'}))
+            pipe.send(('render', ((), {})))
         imgs = [pipe.recv() for pipe in self.remotes]
         return imgs
 

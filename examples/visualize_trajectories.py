@@ -1,14 +1,14 @@
 """
-Script for loading pickle file with trajectories and 
-animating them.  
+Script for loading pickle file with trajectories and
+animating them.
 """
 
-import gym
+import gymnasium as gym
 import pickle
-import click 
+import click
 import sys, os
-sys.path.insert(0, os.path.abspath('..'))
-from utils import helpers
+from mjmpc.utils import helpers
+from mjmpc.envs import GymEnvWrapper
 
 DESC = '''
 Helper script to visualize optimized trajectories (list of trajectories in format).\n
@@ -21,7 +21,7 @@ USAGE:\n
 @click.option('--repeat', type=int, prompt='Number of times to render(default=10)', help='number of times to play trajectories', default=10)
 
 def main(file, env_name, repeat):
-    env = gym.make(env_name)
+    env = GymEnvWrapper(gym.make(env_name, render_mode="human"))
     trajectories = pickle.load(open(file, 'rb'))
     helpers.render_trajs(env, trajectories, n_times=repeat)
 

@@ -1,5 +1,5 @@
 <mujoco model="7dof reacher">
-   <compiler inertiafromgeom="true" angle="radian" coordinate="local" />
+   <compiler inertiafromgeom="true" angle="radian" />
    <option timestep="0.01" gravity="0 0 0" iterations="100" integrator="Euler" />
    <default>
       <joint armature="0.004" damping="0.8" limited="true" />

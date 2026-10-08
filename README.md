@@ -1,5 +1,5 @@
 # mjmpc
-A collection of sampling based Model Predictive Control algorithms. 
+A collection of sampling based Model Predictive Control algorithms.
 
 If you use this repository as part of your research please cite the following publication::
 ```
@@ -14,62 +14,107 @@ url={https://openreview.net/forum?id=RqCC_00Bg7V}
 ```
 
 ## Installation
-You first need to download MuJoCO and obtain a licence key from [here](https://www.roboti.us/index.html)
 
-[1] Create conda environment 
-```
-conda create --name mjmpc python=3.7
-conda activate mjmpc
-```
+Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/) are required.
+From the repository root:
 
-[2] Install [mujoco_py](https://github.com/openai/mujoco-py) and [gym](https://gym.openai.com/docs/#installation) 
- 
-[3] Clone mjmpc
-```
-git clone git@github.com:mohakbhardwaj/mjmpc.git && cd mjmpc
-conda env update -f setup/environment.yml
+```sh
+uv sync --locked
+uv run python examples/example_random_policy.py --steps 200
+uv run mjmpc --config examples/configs/pendulum.yml --controller mppi --save_dir ./experiments
 ```
 
-[4] Clone and install [mjrl](https://github.com/aravindr93/mjrl)
+`pyproject.toml` defines the package and `uv.lock` pins the complete environment.
+MuJoCo is installed as a wheel; no license key, separate simulator download, Conda,
+`mujoco_py`, or `mjrl` installation is needed. Native MuJoCo 3.x, Gymnasium 1.x,
+NumPy 2.x, and current PyTorch are used throughout the maintained implementation.
 
-[5] (Optional) Clone and install [mj_envs](https://github.com/vikashplus/mj_envs) (only required if you want to run hand_manipulation_suite, sawyer or classic_control environments)
+For SAC training tools and the Stable Baselines3 example:
 
-[6] Install mjmpc
-```
-cd mjmpc
-pip install -e .
-```
-
-## Examples
-Take a look at the examples directory.
-```
-cd examples
+```sh
+uv sync --locked --extra training
+uv run --extra training python -m mjmpc.control.softqmpc.scripts.train_sac_stable --steps 10000
 ```
 
-To run a single instance of a controller by loading parameters from a config file run
-```
-python example_mpc.py --config_file <config_file> --controller_type  <controller_name> --save_dir .
-```
-For example, to run MPPI for a reaching task with Sawyer robot, run the following
-```
-python example_mpc.py --config_file configs/reacher_7d0f-v0 --controller_type  mppi --save_dir .
-``` 
-After running MPPI the results will be stored in ./reacher_7dof-v0/ <timestamp>/mppi/. 
-Use the flag `--dump_vids` to dump videos of all the trajectories.
+## Examples and environments
 
-We have provided example config files in `examples/configs` folder. The parameters for individual algorithms are explained below. 
+Run examples from the repository root. `example_mpc.py` supports `--config`,
+`--controller`, `--save_dir`, `--dyn_randomize_config`, and `--dump_vids`.
+It saves metrics and `trajectories.pkl` beneath the selected output directory.
+`example_mpc_cl.py` runs closed-loop linear Gaussian REINFORCE;
+`TorchModelVecEnv` provides neural policy rollouts; `job_script.py` supports
+parameter sweeps. Multiprocessing uses `spawn`, so custom entry points must use
+an `if __name__ == "__main__":` guard.
 
+Bundled tasks are `SimplePendulum-v0`, `Swimmer-v0`, `HalfCheetah-v0`,
+`reacher_7dof-v0`, and `continual_reacher-v0`; their task rewards and dynamics
+are retained. `LQREnv` is available for custom linear systems. Native Gymnasium
+MuJoCo environments such as `HalfCheetah-v5` also work with `GymEnvWrapper`.
+The older locomotion IDs are retained for existing configurations and may produce
+Gymnasium version warnings.
 
-## Controllers 
+The hand, Sawyer, Panda, point-mass, and lowercase cartpole/acrobot configurations
+refer to external environments that were never bundled here. They remain as
+experiment references; running them requires a separately registered **Gymnasium**
+implementation with equivalent task dynamics and state access. The old `mj_envs`
+package is not imported or installed automatically. The missing `continual_maze-v0`
+implementation is no longer registered. These tasks have not been substituted with
+different benchmark environments.
+
+Rendering is selected when constructing an environment (`render_mode="human"`
+or `"rgb_array"`). `--dump_vids` uses imageio/FFmpeg. On a headless Linux machine,
+MuJoCo rendering can use `MUJOCO_GL=egl` if an EGL driver is available, or
+`MUJOCO_GL=osmesa` with OSMesa installed. Ordinary simulation and tests need no display.
+
+## Migration notes
+
+- Environments follow [Gymnasium's API](https://gymnasium.farama.org/introduction/migration_guide/):
+  `reset(seed=...)` returns `(observation, info)` and `step` returns
+  `(observation, reward, terminated, truncated, info)`.
+- `GymEnvWrapper` and the controller vector interfaces retain their MPC contract:
+  observation-only reset and `(observation, reward, done, info)` step. Both end flags
+  are retained in `info`; `done` is their union. This is the single adaptation boundary.
+- Snapshots now contain `env_state`, `rng_state`, and `elapsed_steps`. MuJoCo
+  snapshots use its [native integration state API](https://mujoco.readthedocs.io/en/latest/programming/simulation.html),
+  including actuator and solver state. Saved state dictionaries from the old backend
+  need conversion; old pickled trajectories are not automatically portable.
+- Candidate rollouts restore the starting state, including after an exception.
+  Ended episodes are padded with zero rewards and terminal observations. Structured
+  observations are flattened with Gymnasium's space utilities in rollout arrays.
+- Dynamics randomization retains body mass/inertia, joint damping/friction loss,
+  and geometry size/friction. Joint parameters address all of the joint's DoFs.
+  The obsolete `sensor_noise` model field is not supported by this native backend.
+- Value-function fitting uses `torch.linalg`. Video export uses imageio instead of
+  scikit-video. Unused deprecated SAC copies, a commented-out closed-loop prototype,
+  and the incomplete, unexported SAC-MPC prototype have been removed. The standalone
+  SAC, SoftQ, and neural random-shooting implementations remain.
+- iLQR was an unfinished placeholder in the original repository and remains so;
+  this migration does not implement a new controller algorithm.
+
+## Development
+
+```sh
+uv sync --locked
+uv run pytest
+uv run ruff check .
+uv build
+```
+
+Tests cover environment contracts, snapshot/replay behavior, time limits, dynamics
+randomization, serial/subprocess rollouts, sampling controllers, and value fitting.
+Historical `*_test.py` files are standalone research diagnostics, not pytest suites.
+CI runs on Python 3.11–3.13 and builds the distributable, including MuJoCo XML assets.
+
+## Controllers
 Following parameters are common for all controllers
-| Parameter         |                                                                       | 
+| Parameter         |                                                                       |
 |-------------------|-----------------------------------------------------------------------|
 | ``horizon``       | rollout horizon                                                       |
 | ``num_particles`` | number of particles to rollout                                        |
 | ``n_iters``       | number of iterations of optimization per timestep                     |
 | ``gamma``         | discount factor                                                       |
 | ``filter_coeffs`` | coefficients for autoregressive filtering (generate correlated noise) |
-| ``base_action``   | action to append at the end after shifting distribution for next step | 
+| ``base_action``   | action to append at the end after shifting distribution for next step |
 
 
 Additionally, each controller has it's own specific parameters
@@ -96,7 +141,7 @@ Based on [Williams et al.](https://homes.cs.washington.edu/~bboots/files/Informa
 
 
 #### Cross Entropy Method (CEM)
-Samples particles from a Gaussian control distribution and updates the mean and covariance using sample estimates from a set of elite samples based on cost. 
+Samples particles from a Gaussian control distribution and updates the mean and covariance using sample estimates from a set of elite samples based on cost.
 
 | Parameter     |                                                       |
 |---------------|-------------------------------------------------------|
@@ -120,34 +165,13 @@ Uses a non-parametric distribution represented by particles and updates it using
 
 
 
-## Tuning Controllers and Running Parameter Sweeps 
-We have also provided a job_script for tuning and benchmarking various MPC algorithms. 
-```
-python job_script.py --config_file <config_file> --controller_type  <controller_name>
-```
-For example, to run MPPI on trajopt_reacher-v0 we can use
-```
-python job_script.py --config_file configs/sawyer_reacher-v0.yml --controller_type mppi
-```
-Replace mppi with random_shooting, cem or dmd to run different controllers using parameters provided in the config files. The working of the job script are explained below.
+## Using your own environments
 
-
-## Using Your Own Environments
-As such the control framework is agnostic to the environment definition and only expects as input two functions
-
-[1] `rollout_fn`: Takes as input a batch of actions and returns a vector of costs encountered
-
-[2] `set_sim_state_fn`: sets the state of simulation environments.
-
-
-
-However, if you wish to use our GymEnvWrapper, it expects the environment to have a few additional functions implemented such as
-
-[1] `set_env_state`: Sets the state of the environment
-
-[2] `get_env_state`: Returns the current state of the environment
-
-Please look at hre Currently can be seen from `envs/reacher_env.py` for an example environment.
+Controllers accept `rollout_fn` and `set_sim_state_fn` callbacks and are independent
+of MuJoCo. `GymEnvWrapper` accepts Gymnasium environments exposing `get_env_state`,
+`set_env_state`, and `get_obs` (or `_get_obs`). Native MuJoCo `model`/`data` state
+is handled automatically. Keep arbitrary custom task state in the environment's
+snapshot methods; see `mjmpc/envs/basic/reacher_env.py` for a target and timed-event example.
 
 ## Control Parameters
 
@@ -161,12 +185,3 @@ These parameters are currently manually tuned.
 | Swimmer-v0        | 500            | 32      | 36            | 0.01   | 3.0        | 0.55      | 1.0   | 1         |
 | HalfCheetah-v0    | 500            | 32      | 36            | 0.01   | 3.0        | 0.55      | 1.0   | 1         |
 | trajopt_reacher-v0| 200            | 32      | 36            | 0.01   | 3.0        | 0.55      | 1.0   | 1         |
-
-
-## TODO
-1. Batch version of controllers
-2. Environment render function must have functionality to save frames/videos and work for batch size > 1
-3. <span style="color:red">Implement rollout function for mujoco_env in Cython.</span>
-4. ~~<span style="color:red"> Grid search for tuning controller hyperparameters.</span>~~
-
-

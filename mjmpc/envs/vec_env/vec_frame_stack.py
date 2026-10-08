@@ -1,5 +1,5 @@
 import numpy as np
-from gym import spaces
+from gymnasium import spaces
 
 from .base_vec_env import VecEnvWrapper
 
@@ -11,7 +11,7 @@ class VecFrameStack(VecEnvWrapper):
     :param venv: (VecEnv) the vectorized environment to wrap
     :param n_stack: (int) Number of frames to stack
     """
-    
+
     def __init__(self, venv, n_stack):
         self.venv = venv
         self.n_stack = n_stack

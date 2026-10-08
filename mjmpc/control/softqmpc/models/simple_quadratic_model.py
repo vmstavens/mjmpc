@@ -43,7 +43,7 @@ class SimpleQuadraticQFunc(nn.Module):
         P = self.P
         inps = torch.cat((states, actions), axis=-1)
         inps = inps.unsqueeze(1)
-        
+
         quad_term = 0.5 * F.bilinear(inps, inps, P.unsqueeze(0)).squeeze(-1)
         lin_term = F.linear(inps, self.J)
         out = quad_term + lin_term  + self.c
@@ -64,8 +64,8 @@ class SimpleQuadraticQFunc(nn.Module):
         """
         out = self(states, actions)
         loss_term = 0.5 * F.mse_loss(out, targets, reduction='mean')
-        # reg_term = reg * torch.norm(self.P - self.eye) 
-        loss = loss_term #+ reg_term 
+        # reg_term = reg * torch.norm(self.P - self.eye)
+        loss = loss_term #+ reg_term
         return loss
 
     @property
@@ -75,10 +75,10 @@ class SimpleQuadraticQFunc(nn.Module):
         Lmat[tril_indices[0], tril_indices[1]] = self.L
         P = torch.mm(Lmat, Lmat.t())
         return P
-    
+
     def get_act_mean_sigma(self, state, lam):
         """
-        Return conditional mean and covariance of 
+        Return conditional mean and covariance of
         actions given state
         In Natural Parameterization we have,
             J = [Js, Ja], P = [Pss, Pas^T; Pas, Paa]
@@ -86,7 +86,7 @@ class SimpleQuadraticQFunc(nn.Module):
         which gives Moment Parameterization
             Sigma = Paa^-1
             mu = Sigma * (Ja - Psa * state)
-        
+
         Parameters
         ----------
         state: Tensor (1 x self.d_state)
@@ -102,7 +102,7 @@ class SimpleQuadraticQFunc(nn.Module):
         """
         P = self.P.data
         J = self.J.data
-        
+
         Pas = P[-self.d_act:, 0:self.d_state]
         Paa = P[-self.d_act:, -self.d_act:]
         Paa_inv = torch.cholesky_inverse(Paa)
@@ -118,7 +118,7 @@ class SimpleQuadraticQFunc(nn.Module):
         Sigma = lam * torch.cholesky_inverse(P)
         Sigma += beta * torch.eye(Sigma.shape[0])
         Pnew = (1./lam) * torch.cholesky_inverse(Sigma)
-        Lmat = torch.cholesky(Pnew)
+        Lmat = torch.linalg.cholesky(Pnew)
         tril_indices = torch.tril_indices(row=self.d_total, col=self.d_total, offset=0)
         self.L.data = Lmat[tril_indices[0], tril_indices[1]]
 
@@ -147,5 +147,3 @@ class SimpleQuadraticQFunc(nn.Module):
         for name, param in self.named_parameters():
             if param.requires_grad:
                 print(name, param.data)
-
-

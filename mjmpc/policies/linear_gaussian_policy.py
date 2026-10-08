@@ -4,7 +4,7 @@ import torch
 from torch.autograd import Variable
 from torch.distributions import Normal
 import torch.nn as nn
-from gym.utils import seeding
+from gymnasium.utils import seeding
 
 from mjmpc.utils import EnsembleModel
 
@@ -17,7 +17,7 @@ class LinearGaussianPolicy(nn.Module):
         self.init_log_std = init_log_std
         self.device = device
         self.seed(seed)
-        
+
         # Policy Parameters
         self.linear_mean = nn.Linear(self.d_obs, self.d_action, bias=True)
         torch.nn.init.zeros_(self.linear_mean.bias)
@@ -35,7 +35,7 @@ class LinearGaussianPolicy(nn.Module):
         # # Old Policy Parameters
         # self.old_linear_mean = nn.Linear(self.d_obs, self.d_action)
         # self.old_log_std = nn.Parameter(torch.ones(self.d_action) * init_log_std, requires_grad=False)
-        # for idx, p in enumerate(self.old_linear_mean.parameters()): 
+        # for idx, p in enumerate(self.old_linear_mean.parameters()):
         #     p.data = self.trainable_params[idx].data.clone()
         #     p.requires_grad = False
         # self.old_parameters = list(self.old_linear_mean.parameters()) + [self.old_log_std]
@@ -50,30 +50,29 @@ class LinearGaussianPolicy(nn.Module):
         # Placeholders
         # ------------------------
         # self.obs_var = Variable(torch.randn(self.d_obs), requires_grad=False)
-    
+
     def forward(self, observation):
         pass
-    
+
     def get_action(self, observation, mode='sample', white_noise=None):
         mean = self.linear_mean(observation)
         std = self.log_std.exp()
         normal = Normal(mean, std)
-        
+
         if mode == 'mean':
-            action = deepcopy(mean)
+            action = mean.clone()
             # print(std, np.exp(self.min_log_std))
         elif mode == 'sample':
-            std_np = std.data.detach() 
             if white_noise is None:
-                white_noise = self.np_random.randn(self.d_action) 
-            noise_sample = std_np * white_noise
-            action = mean + torch.from_numpy(np.float32(noise_sample))
-        
-        log_prob = normal.log_prob(action).detach().numpy()
-        mean_np = mean.data.detach().numpy().ravel()
-        log_std_np = self.log_std.data.detach().numpy().ravel() 
+                white_noise = self.np_random.standard_normal(self.d_action)
+            noise = torch.as_tensor(white_noise, dtype=mean.dtype, device=mean.device)
+            action = mean + std.detach() * noise
+
+        log_prob = normal.log_prob(action).detach().cpu().numpy()
+        mean_np = mean.data.detach().cpu().numpy().ravel()
+        log_std_np = self.log_std.data.detach().cpu().numpy().ravel()
         return action, {'mean': mean_np, 'log_std': log_std_np, 'evaluation': mean_np, 'log_prob': log_prob}
-    
+
     def log_prob(self, observations, actions):
         means_new = self.linear_mean(observations)
         std_new = self.log_std.exp()
@@ -95,7 +94,7 @@ class LinearGaussianPolicy(nn.Module):
         self.log_std.data.copy_(torch.clamp(self.log_std.data, min=self.min_log_std))
 
     def grow_cov(self, beta):
-        self.log_std.data.add_(beta)        
+        self.log_std.data.add_(beta)
 
     #################
     ### Utilities ###
@@ -104,7 +103,7 @@ class LinearGaussianPolicy(nn.Module):
         params = np.concatenate([p.contiguous().view(-1).data.numpy()
                                  for p in self.parameters()])
         return params.copy()
-    
+
     # def set_param_values(self, new_params, set_new=True, set_old=False):
     #     if set_new:
     #         current_idx = 0
@@ -113,7 +112,7 @@ class LinearGaussianPolicy(nn.Module):
     #             vals = vals.reshape(self.param_shapes[idx])
     #             param.data = torch.from_numpy(vals).float()
     #             current_idx += self.param_sizes[idx]
-            
+
     #         # clip std at minimum value
     #         self.trainable_params[0].data = \
     #             torch.clamp(self.trainable_params[0], self.min_log_std).data
@@ -146,7 +145,7 @@ class LinearGaussianPolicy(nn.Module):
             if param.requires_grad:
                 grad_dict[name] = param.grad.data.norm(2).item()
         return grad_dict
-    
+
     #############
     ## Seeding ##
     #############
@@ -172,7 +171,7 @@ if __name__ == "__main__":
     with torch.no_grad():
         action, act_infos = policy.get_action(observation)
         log_prob = policy.log_prob(observation, action)
-    
+
 
     print('Got action', action)
     print('Log prob', log_prob)

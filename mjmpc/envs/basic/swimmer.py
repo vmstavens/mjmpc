@@ -1,51 +1,43 @@
 import numpy as np
-from gym import utils
-from gym.envs.mujoco import mujoco_env
+from gymnasium import utils, spaces
+from .mujoco_state import MujocoStateMixin
+from gymnasium.envs.mujoco import mujoco_env
 
-class SwimmerEnv(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self):
-        mujoco_env.MujocoEnv.__init__(self, 'swimmer.xml', 4)
-        utils.EzPickle.__init__(self)
+
+class SwimmerEnv(MujocoStateMixin, mujoco_env.MujocoEnv, utils.EzPickle):
+    metadata = {"render_modes": ["human", "rgb_array", "depth_array"], "render_fps": 25}
+
+    def __init__(self, **kwargs):
+        mujoco_env.MujocoEnv.__init__(
+            self,
+            "swimmer.xml",
+            4,
+            observation_space=spaces.Box(-np.inf, np.inf, (8,), dtype=np.float64),
+            **kwargs,
+        )
+        utils.EzPickle.__init__(self, **kwargs)
 
     def step(self, a):
         ctrl_cost_coeff = 0.0001
-        xposbefore = self.sim.data.qpos[0]
+        xposbefore = self.data.qpos[0]
         self.do_simulation(a, self.frame_skip)
-        xposafter = self.sim.data.qpos[0]
+        xposafter = self.data.qpos[0]
         reward_fwd = (xposafter - xposbefore) / self.dt
-        reward_ctrl = - ctrl_cost_coeff * np.square(a).sum()
+        reward_ctrl = -ctrl_cost_coeff * np.square(a).sum()
         reward = reward_fwd + reward_ctrl
+        if self.render_mode == "human":
+            self.render()
         ob = self._get_obs()
-        return ob, reward, False, dict(reward_fwd=reward_fwd, reward_ctrl=reward_ctrl)
+        return ob, reward, False, False, dict(reward_fwd=reward_fwd, reward_ctrl=reward_ctrl)
 
     def _get_obs(self):
-        qpos = self.sim.data.qpos
-        qvel = self.sim.data.qvel
+        qpos = self.data.qpos
+        qvel = self.data.qvel
         return np.concatenate([qpos.flat[2:], qvel.flat])
 
     def reset_model(self):
         self.set_state(
-            self.init_qpos + self.np_random.uniform(low=-.1, high=.1, size=self.model.nq),
-            self.init_qvel + self.np_random.uniform(low=-.1, high=.1, size=self.model.nv)
+            self.init_qpos + self.np_random.uniform(low=-0.1, high=0.1, size=self.model.nq),
+            self.init_qvel + self.np_random.uniform(low=-0.1, high=0.1, size=self.model.nv),
         )
         return self._get_obs()
-
-    def get_env_state(self):
-        state = self.sim.get_state()
-        qpos = state.qpos.flat.copy()
-        qvel = state.qvel.flat.copy()
-        state = {'qpos': qpos, 'qvel': qvel}
-        return state
-
-    def set_env_state(self, state_dict):
-        qpos = state_dict['qpos'].copy()
-        qvel = state_dict['qvel'].copy()
-        
-        state = self.sim.get_state()
-        for i in range(self.model.nq):
-            state.qpos[i] = qpos[i]
-        for i in range(self.model.nv):
-            state.qvel[i] = qvel[i]
-        self.sim.set_state(state)
-        self.sim.forward()
-    

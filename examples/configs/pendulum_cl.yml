@@ -1,0 +1,19 @@
+env_name: SimplePendulum-v0
+n_episodes: 1
+max_ep_length: 200
+seed: 0
+render: false
+reinforce:
+  horizon: 16
+  init_cov: 1.0
+  gamma: 1.0
+  n_iters: 2
+  lr: 0.01
+  beta: 0.0
+  filter_coeffs: [0.25, 0.8, 0.0]
+  num_cpu: 2
+  particles_per_cpu: 12
+  loss_thresh: 0.001
+  delta_kl: 1.0
+  delta_reg: 0.001
+  max_linesearch_iters: 10
